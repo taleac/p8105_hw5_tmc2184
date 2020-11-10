@@ -58,9 +58,12 @@ baltimore
 
 ```{r prop test for each city}
 
-homicide_dat %>% nest(data = uid:total_unsolved) %>%
-  mutate(models = map(data, prop_states)) %>%
-  unnest()
+homicide_dat = homicide_dat %>% 
+  nest(data = uid:total_unsolved) %>%
+  mutate(models = map(data, prop_states),
+         tidied = map(models, broom::tidy)) %>%
+  unnest(tidied) %>%
+  select(city_state, estimate, conf.low, conf.high)
 
 ```
 
@@ -68,11 +71,25 @@ homicide_dat %>% nest(data = uid:total_unsolved) %>%
 
 ```{r plots for prop tests}
 
+homicide_dat %>% ungroup() %>%
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) +  
+  geom_point(aes(color = estimate)) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high))  +
+  theme(text = element_text(size = 15),
+        axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1, size = 8),
+                                   legend.position = "none") +
+  labs(
+    title = "Proportion of Unsolved Homicides",
+    x = "Location",
+    y = "Proportion"
+  ) +
+  scale_color_gradient(low = "darkblue", high = "red") 
+
 ```
 
 
 >Problem 2
-
 
 >This zip file contains data from a longitudinal study that included a control arm and an experimental arm. Data for each participant is included in a separate file, and file names include the subject ID and arm.
 
@@ -81,8 +98,7 @@ homicide_dat %>% nest(data = uid:total_unsolved) %>%
 >Start with a dataframe containing all file names; the list.files function will help
 Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe
 
->Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”, and do any other tidying that’s necessary
-Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
+
 
 ```{r read and tidy data}
 paths = list.files(path = "./data/", pattern = "*.csv", full.names = T) %>% 
@@ -99,11 +115,17 @@ paths = list.files(path = "./data/", pattern = "*.csv", full.names = T) %>%
 
 ```
 
-```{r create plot}
 
+>Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”, and do any other tidying that’s necessary
+Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
+
+```{r create plot}
+paths %>% 
+  ggplot(aes(x = week, y = outcome, group = id, color = condition)) +
+    geom_line() + facet_grid(. ~ condition)
 ```
 
-
+**The plot shows that subjects in the control (con) and experimental (exp) condition start at around the same level for the outcome at week 0. However, whereas the control condition stays relatively stable, each subject in the experimental condition shows a steady increase in the outcome over time between weeks 0 and 8.**
 
 >Problem 3
 
@@ -115,7 +137,32 @@ Fix σ=5
 Set μ=0. Generate 5000 datasets from the model
 x∼Normal[μ,σ]
 
+```{r}
+sim_data = function(mean_val) {tibble(
+    x = rnorm(n = 30, mean = mean_val, sd = 5)
+  )
+}
+
+output = vector("list", 5000)
+
+for (i in 1:5000) {
+  output[[i]] = sim_data(0)
+}
+
+```
+
+
 >For each dataset, save μ^ and the p-value arising from a test of H:μ=0 using α=0.05. Hint: to obtain the estimate and p-value, use broom::tidy to clean the output of t.test.
+
+```{r}
+clean_null = function(.dat, null){
+  
+}
+
+output %>%
+  mutate(h_0 = broom::tidy(t.test(output[[]])
+```
+
 
 >Repeat the above for μ={1,2,3,4,5,6}, and complete the following:
 
