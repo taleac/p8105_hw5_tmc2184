@@ -99,7 +99,6 @@ homicide_dat %>% ungroup() %>%
 Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe
 
 
-
 ```{r read and tidy data}
 paths = list.files(path = "./data/", pattern = "*.csv", full.names = T) %>% 
     map_df(~read_csv(.)) %>%
@@ -137,35 +136,112 @@ Fix σ=5
 Set μ=0. Generate 5000 datasets from the model
 x∼Normal[μ,σ]
 
-```{r}
+```{r simulate data}
+
 sim_data = function(mean_val) {tibble(
     x = rnorm(n = 30, mean = mean_val, sd = 5)
   )
 }
 
-output = vector("list", 5000)
+output_sim = vector("list", 5000)
 
 for (i in 1:5000) {
-  output[[i]] = sim_data(0)
+  output_sim[[i]] = sim_data(0)
 }
 
 ```
 
-
 >For each dataset, save μ^ and the p-value arising from a test of H:μ=0 using α=0.05. Hint: to obtain the estimate and p-value, use broom::tidy to clean the output of t.test.
 
-```{r}
-clean_null = function(.dat, null){
+```{r simulate for mean of zero}
+tidy_t = function(dat) {
+  broom::tidy(t.test(dat))
+}
+
+sim_tidy_t = function(mean_val) {
+  
+  temp_res = vector("list", 5000)
+
+for (i in 1:5000) {
+  temp_res[[i]] = tidy_t(sim_data(mean_val))
+}
+  
+  unnest(tibble(temp_res)) %>%
+  mutate(mu = mean_val) %>%
+  select(mu, estimate, p.value)
+  
   
 }
 
-output %>%
-  mutate(h_0 = broom::tidy(t.test(output[[]])
+mu_0 = sim_tidy_t(0)
+mu_0
 ```
 
 
 >Repeat the above for μ={1,2,3,4,5,6}, and complete the following:
 
+```{r simulate data for all mu}
+output = vector("list", 7)
+
+for (i in 1:7){
+  output[[i]] = sim_tidy_t(i-1)
+}
+
+sim_results = bind_rows(output)
+
+```
+
 >Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.
 
+```{r plot power}
+
+sim_results %>%
+  mutate(reject = (p.value < .05)) %>%
+  group_by(mu) %>%
+  summarise(n_rejected = sum(reject)) %>%
+  mutate(proportion_rejected = n_rejected/5000) %>%
+  ggplot(aes(x = mu, y = proportion_rejected, color = mu)) +
+    geom_point(aes(size = 5)) +
+  labs(
+    title = "Power and Effect Size, Given N = 30 and SD = 5",
+    x = "Mu",
+    y = "Proportion Rejected"
+  ) +  
+  theme_minimal() + 
+  theme(legend.position = "none")
+```
+
+**This plot is based on simulations of 5,000 datasets (n=30 and sd=5) for 7 different values of mu (0, 1, 2, 3, 4, 5, and 6). The plot shows that, as mu increases, the null hypothesis is rejected more frequently (i.e., as the effect size increases, the power to detect a mean that is not equal to zero also increases).**
+
 >Make a plot showing the average estimate of μ^ on the y axis and the true value of μ on the x axis. Make a second plot (or overlay on the first) the average estimate of μ^ only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. Is the sample average of μ^ across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
+
+```{r plot estimates}
+
+sim_results %>%
+  mutate(reject = (p.value < .05)) %>%
+  group_by(mu) %>%
+  summarise(mean_all = mean(estimate),
+            n_rejected = sum(reject),
+            mean_rejected = sum(estimate*reject)/n_rejected) %>%
+  pivot_longer(
+    c(mean_all, mean_rejected),
+    names_to = "estimate_type", 
+    values_to = "mean_estimate") %>%
+  ggplot(aes(x = mu, y = mean_estimate, group = estimate_type, 
+             color = estimate_type)) +
+    geom_point() +
+  labs(
+    title = "True and Estimated Mu",
+    x = "True",
+    y = "Estimate"
+  ) +  
+  theme_minimal() + 
+  theme(legend.position = "bottom")
+
+```
+
+**The sample average mu across tests is extremely close to the population mu (e.g., across 5,000 repetitions of a random sample where true population mu was equal to 1, the mean estimated sample mu was essentially 1). However, when the null hypothesis was incorrectly rejected, the sample estimate of mu was noticeably different than the true population value (e.g., foa population mu of 1, if the null was rejected, sample mu was estimated to be closer to 2). This makes sense, because random sampling error will sometimes generate mean values that are different from the population mean, and it is more likely that the null hypothesis will be incorrectly rejected when this happens.**
+
+
+
+
